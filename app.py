@@ -1,4 +1,4 @@
-       import streamlit as st
+import streamlit as st
 
 # Set the page title and layout
 st.set_page_config(page_title="The Campus Bookstore", page_icon="📚", layout="wide")
