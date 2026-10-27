@@ -1,197 +1,112 @@
-import streamlit as st
-from datetime import datetime
+    student_discount = st.checkbox("Use student discount (5%)")
 
-# ------------------------------------------------------------
-# Campus Bookstore - Book Order and Bill Calculator
-# A beginner-level Python + Streamlit business application.
-# ------------------------------------------------------------
-
-st.set_page_config(
-    page_title="Campus Bookstore | Order Calculator",
-    page_icon="📚",
-    layout="wide"
-)
-
-# Dictionary: each book title is linked to its sample selling price.
-BOOKS = {
-    "Introduction to Business": 450.00,
-    "Principles of Management": 520.00,
-    "Business Statistics": 480.00,
-    "Python Programming for Beginners": 600.00,
-    "Financial Accounting": 550.00,
-    "Marketing Management": 575.00,
-    "Business Law": 500.00,
-    "Economics: An Introduction": 425.00,
-}
-
-# Simple page styling. All calculations are performed in Python below.
-st.markdown("""
-<style>
-    .stApp { background-color: #f7f8fb; }
-    .block-container { padding-top: 1.7rem; padding-bottom: 2rem; }
-    h1, h2, h3 { color: #203354; }
-    div[data-testid="stMetric"] {
-        background: #ffffff;
-        border: 1px solid #e1e6ef;
-        border-radius: 12px;
-        padding: 14px;
-    }
-    div.stButton > button {
-        border-radius: 9px;
-        font-weight: 600;
-    }
-    .book-note {
-        background: #eef3fb;
-        border-left: 4px solid #315a91;
-        padding: 12px;
-        border-radius: 5px;
-    }
-</style>
-""", unsafe_allow_html=True)
-
-# Header area
-st.title("📚 Campus Bookstore")
-st.subheader("Book Order & Bill Calculator")
-st.write(
-    "Choose your books and order preferences to prepare an estimated bill. "
-    "This demo uses sample book prices and is designed for a classroom project."
-)
-
-with st.sidebar:
-    st.header("About this tool")
-    st.write("A simple ordering calculator for a small bookstore.")
-    st.write("It calculates the book subtotal, discount, optional gift wrapping, and final amount.")
-    st.caption("No order is stored and no payment is collected.")
-
-st.divider()
-
-# Two-column layout keeps the input area readable.
-input_col, info_col = st.columns([1.15, 0.85], gap="large")
-
-with input_col:
-    st.header("1. Build your order")
-
-    # Input 1: choose a book from the available catalogue.
-    selected_book = st.selectbox("Select a book", list(BOOKS.keys()))
-
-    # Input 2: quantity is restricted to whole numbers from 1 to 20.
-    quantity = st.number_input(
-        "Number of copies",
-        min_value=1,
-        max_value=20,
-        value=1,
-        step=1
-    )
-
-    # Input 3: customers choose standard or express delivery.
-    delivery = st.radio(
-        "Delivery option",
-        ["Store pickup (Free)", "Standard delivery (₹60)", "Express delivery (₹120)"],
-        index=0
-    )
-
-    # Input 4: optional gift wrapping.
-    gift_wrap = st.checkbox("Add gift wrapping (+₹30 per order)")
-
-    # Input 5: optional student discount, applied before delivery.
-    student_discount = st.checkbox("Apply student discount (5%)")
-
-    # Input 6: coupon selection determines an additional discount.
+    # Input 6: choose a coupon
     coupon = st.selectbox(
-        "Coupon code",
+        "Choose a coupon",
         ["No coupon", "READ10 (10% off books)", "WELCOME5 (5% off books)"]
     )
 
-    # Input 7: optional customer name for the bill heading.
-    customer_name = st.text_input("Customer name (optional)", max_chars=60)
+    # Input 7: name is optional
+    customer_name = st.text_input("Your name (optional)")
 
-with info_col:
+with right:
     st.header("2. Book details")
-    st.markdown("### " + selected_book)
-    st.metric("Price per copy", f"₹{BOOKS[selected_book]:,.2f}")
-    st.write(f"**Copies selected:** {quantity}")
-    st.write("**Catalogue size:**", len(BOOKS), "sample titles")
-    st.markdown(
-        '<div class="book-note">Tip: select a quantity, delivery option and any eligible discount. '
-        'The bill below updates automatically.</div>',
-        unsafe_allow_html=True
-    )
-    st.caption("All titles and prices are illustrative examples for this project.")
+    st.subheader(book_name)
+    st.metric("Price for one book", f"₹{books[book_name]:,.2f}")
+    st.write("Number of books in catalogue:", len(books))
+    st.info("Change your choices to update the bill.")
 
-# --------------------- Calculation section ---------------------
+# Use a function to calculate the bill
+def calculate_bill(price, quantity, coupon, student_discount, delivery, gift_wrap):
+    # Multiply price by quantity to get the book total
+    book_total = price * quantity
 
-# Calculate the total price before discounts.
-unit_price = BOOKS[selected_book]
-book_subtotal = unit_price * quantity
+    # Decide the coupon discount with if, elif and else
+    if coupon == "READ10 (10% off books)":
+        coupon_rate = 10
+    elif coupon == "WELCOME5 (5% off books)":
+        coupon_rate = 5
+    else:
+        coupon_rate = 0
 
-# Determine coupon rate using if/elif/else conditional logic.
-if coupon == "READ10 (10% off books)":
-    coupon_rate = 0.10
-elif coupon == "WELCOME5 (5% off books)":
-    coupon_rate = 0.05
-else:
-    coupon_rate = 0.00
+    # Add the student discount if it was selected
+    if student_discount:
+        student_rate = 5
+    else:
+        student_rate = 0
 
-# Student discount is represented by a Boolean checkbox value.
-student_rate = 0.05 if student_discount else 0.00
+    # Add the discount rates, but do not go over 15 percent
+    discount_rate = coupon_rate + student_rate
+    if discount_rate > 15:
+        discount_rate = 15
 
-# Discounts apply to the book subtotal, and combined discount is capped at 15%.
-combined_discount_rate = min(coupon_rate + student_rate, 0.15)
-discount_amount = book_subtotal * combined_discount_rate
-discounted_books_total = book_subtotal - discount_amount
+    # Calculate how much money is taken off the book total
+    discount_amount = book_total * discount_rate / 100
+    after_discount = book_total - discount_amount
 
-# Delivery charge is selected by the user.
-if delivery == "Standard delivery (₹60)":
-    delivery_charge = 60.00
-elif delivery == "Express delivery (₹120)":
-    delivery_charge = 120.00
-else:
-    delivery_charge = 0.00
+    # Decide the delivery charge
+    if delivery == "Standard delivery (₹60)":
+        delivery_charge = 60
+    elif delivery == "Express delivery (₹120)":
+        delivery_charge = 120
+    else:
+        delivery_charge = 0
 
-# Gift wrapping is a one-time order charge, not a per-book charge.
-gift_wrap_charge = 30.00 if gift_wrap else 0.00
+    # Add the gift wrapping charge if selected
+    if gift_wrap:
+        gift_charge = 30
+    else:
+        gift_charge = 0
 
-# This classroom example does not add GST because actual tax treatment depends
-# on the product and seller. The displayed final amount is an estimate.
-final_total = discounted_books_total + delivery_charge + gift_wrap_charge
+    # Return the values needed to show the bill
+    final_amount = after_discount + delivery_charge + gift_charge
+    return book_total, discount_rate, discount_amount, delivery_charge, gift_charge, final_amount
 
-# ------------------------ Bill display -------------------------
-
-st.divider()
-st.header("3. Order summary")
-
-if customer_name.strip():
-    st.write(f"Prepared for **{customer_name.strip()}**")
-else:
-    st.write("Customer name: **Not provided**")
-
-# Display a simple itemised summary.
-summary = [
-    {"Description": selected_book, "Details": f"{quantity} × ₹{unit_price:,.2f}", "Amount": f"₹{book_subtotal:,.2f}"},
-    {"Description": "Book discount", "Details": f"{combined_discount_rate:.0%}", "Amount": f"-₹{discount_amount:,.2f}"},
-    {"Description": "Delivery", "Details": delivery, "Amount": f"₹{delivery_charge:,.2f}"},
-    {"Description": "Gift wrapping", "Details": "Selected" if gift_wrap else "Not selected", "Amount": f"₹{gift_wrap_charge:,.2f}"},
-]
-st.table(summary)
-
-metric1, metric2, metric3 = st.columns(3)
-metric1.metric("Book subtotal", f"₹{book_subtotal:,.2f}")
-metric2.metric("Total discount", f"₹{discount_amount:,.2f}")
-metric3.metric("Amount payable", f"₹{final_total:,.2f}")
-
-# Business message changes depending on the amount and discount.
-if combined_discount_rate > 0:
-    st.success(f"Discount applied: {combined_discount_rate:.0%} on the book subtotal.")
-elif quantity >= 5:
-    st.info("You have selected several copies. Ask the bookstore whether bulk-order pricing is available.")
-else:
-    st.info("No book discount has been applied. You can select an eligible discount above.")
-
-# Validation and edge-case messaging. Widgets also restrict the quantity range.
-if quantity == 20:
-    st.warning("You selected the maximum quantity allowed in this demo. Please confirm that it is intentional.")
-
-st.caption(
-    "Educational prototype only. Prices, coupons and delivery fees are sample values. "
-    "This app does not process payments, save customer information, or issue a tax invoice."
+# Call the function with the customer's choices
+price = books[book_name]
+book_total, discount_rate, discount_amount, delivery_charge, gift_charge, final_amount = calculate_bill(
+    price, quantity, coupon, student_discount, delivery, gift_wrap
 )
+
+# Show the bill heading
+st.divider()
+st.header("3. Your bill")
+
+# Show the name only if the customer entered one
+if customer_name.strip() != "":
+    st.write("Prepared for:", customer_name.strip())
+else:
+    st.write("Customer name: Not provided")
+
+# Use a loop to make the bill rows
+bill_rows = [
+    ["Book", book_name, f"₹{book_total:,.2f}"],
+    ["Discount", f"{discount_rate}%", f"-₹{discount_amount:,.2f}"],
+    ["Delivery", delivery, f"₹{delivery_charge:,.2f}"],
+    ["Gift wrapping", "Yes" if gift_wrap else "No", f"₹{gift_charge:,.2f}"]
+]
+
+for row in bill_rows:
+    st.write(row[0] + " — " + row[1] + ": " + row[2])
+
+# Show the main totals in three columns
+col1, col2, col3 = st.columns(3)
+col1.metric("Book total", f"₹{book_total:,.2f}")
+col2.metric("Discount", f"₹{discount_amount:,.2f}")
+col3.metric("Final amount", f"₹{final_amount:,.2f}")
+
+# Show a message based on the order
+if discount_rate > 0:
+    st.success("Discount applied: " + str(discount_rate) + "%")
+elif quantity >= 5:
+    st.info("You chose several copies. Ask about a bulk discount.")
+else:
+    st.info("No discount has been applied.")
+
+# Warn the customer when the maximum quantity is selected
+if quantity == 20:
+    st.warning("You selected the maximum of 20 copies.")
+
+st.caption("Sample prices only. No payments are taken and customer details are not saved.")
+
+        
