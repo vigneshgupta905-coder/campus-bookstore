@@ -1,8 +1,9 @@
+
 import streamlit as st
+from pathlib import Path
 
 st.set_page_config(page_title="The Campus Bookstore", page_icon="📚", layout="wide")
 
-# Sample catalogue. Real book-cover images can be added later.
 books = {
     "Introduction to Business": {"price": 450, "category": "Business", "description": "A starting point for understanding how businesses work."},
     "Principles of Management": {"price": 520, "category": "Business", "description": "Explore planning, leadership and organising teams."},
@@ -14,13 +15,32 @@ books = {
     "Economics: An Introduction": {"price": 425, "category": "Law & Economics", "description": "Explore markets, choices and economic thinking."}
 }
 
-# Store cart and wishlist while navigating between pages.
+ASSET_DIR = Path(__file__).parent / "assets"
+HERO_IMAGE = ASSET_DIR / "hero" / "homepage.jpg"
+
+CATEGORY_IMAGES = {
+    "Business": ASSET_DIR / "categories" / "business.jpg",
+    "Finance & Analytics": ASSET_DIR / "categories" / "finance.jpg",
+    "Technology": ASSET_DIR / "categories" / "tech.jpg",
+    "Law & Economics": ASSET_DIR / "categories" / "law.jpg",
+}
+
+BOOK_IMAGES = {
+    "Introduction to Business": ASSET_DIR / "books" / "introduction_to_business.jpg",
+    "Principles of Management": ASSET_DIR / "books" / "principles_of_management.jpg",
+    "Business Statistics": ASSET_DIR / "books" / "business_statistics.jpg",
+    "Python Programming for Beginners": ASSET_DIR / "books" / "python_programming_for_beginners.jpg",
+    "Financial Accounting": ASSET_DIR / "books" / "financial_accounting.jpg",
+    "Marketing Management": ASSET_DIR / "books" / "marketing_management.jpg",
+    "Business Law": ASSET_DIR / "books" / "business_law.jpg",
+    "Economics: An Introduction": ASSET_DIR / "books" / "economics_an_introduction.jpg",
+}
+
 if "cart" not in st.session_state:
     st.session_state.cart = {}
 if "wishlist" not in st.session_state:
     st.session_state.wishlist = []
 
-# Cream, plum and forest-green theme. Image placeholders are intentional for now.
 st.markdown("""
 <style>
 .stApp { background: #fff8f2; color: #2d2928; }
@@ -29,16 +49,16 @@ h1, h2, h3 { color: #754263; }
 div[data-testid="stMetric"] { background: white; border: 1px solid #ead7e1; border-radius: 14px; padding: 12px; }
 div.stButton > button { border-radius: 10px; border: 1px solid #754263; }
 .book-card { background: white; border: 1px solid #ead7e1; border-radius: 16px; padding: 16px; margin-bottom: 8px; }
-.book-placeholder { background: linear-gradient(145deg,#754263,#a97891); color: white; border-radius: 10px; padding: 18px 8px; text-align: center; min-height: 90px; }
 .eyebrow { color: #145b4f; letter-spacing: 2px; font-size: 12px; font-weight: 700; }
 </style>
 """, unsafe_allow_html=True)
 
+
 def money(amount):
     return f"₹{amount:,.2f}"
 
+
 def calculate_bill(subtotal, coupon, student_discount, delivery, gift_wrap):
-    # Choose the coupon percentage.
     if coupon == "READ10":
         coupon_rate = 10
     elif coupon == "WELCOME5":
@@ -46,15 +66,10 @@ def calculate_bill(subtotal, coupon, student_discount, delivery, gift_wrap):
     else:
         coupon_rate = 0
 
-    # Add the optional student discount and cap the total at 15%.
-    if student_discount:
-        student_rate = 5
-    else:
-        student_rate = 0
+    student_rate = 5 if student_discount else 0
     discount_rate = min(coupon_rate + student_rate, 15)
     discount_amount = subtotal * discount_rate / 100
 
-    # Work out the selected delivery charge.
     if delivery == "Standard delivery (+₹60)":
         delivery_charge = 60
     elif delivery == "Express delivery (+₹120)":
@@ -62,14 +77,10 @@ def calculate_bill(subtotal, coupon, student_discount, delivery, gift_wrap):
     else:
         delivery_charge = 0
 
-    # Gift wrapping is an optional flat charge.
-    if gift_wrap:
-        gift_charge = 30
-    else:
-        gift_charge = 0
-
+    gift_charge = 30 if gift_wrap else 0
     final_amount = subtotal - discount_amount + delivery_charge + gift_charge
     return discount_rate, discount_amount, delivery_charge, gift_charge, final_amount
+
 
 def add_book(name):
     if name in st.session_state.cart:
@@ -77,17 +88,26 @@ def add_book(name):
     else:
         st.session_state.cart[name] = 1
 
+
 def book_card(name):
     book = books[name]
-    st.markdown(f"""
-    <div class="book-card">
-      <div class="book-placeholder"><div style="font-size:26px">📚</div><b>{name}</b><br><small>BOOK COVER PLACEHOLDER</small></div>
-      <p class="eyebrow">{book['category'].upper()}</p>
-      <h3>{name}</h3>
-      <p>{book['description']}</p>
-      <b>{money(book['price'])}</b>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown('<div class="book-card">', unsafe_allow_html=True)
+
+    image_path = BOOK_IMAGES.get(name)
+    if image_path and image_path.is_file():
+        st.image(str(image_path), use_container_width=True)
+    else:
+        st.markdown(
+            f'<div style="background:#754263;color:white;padding:35px;text-align:center;border-radius:10px;">📚<br>{name}</div>',
+            unsafe_allow_html=True
+        )
+
+    st.markdown(f"<p class='eyebrow'>{book['category'].upper()}</p>", unsafe_allow_html=True)
+    st.subheader(name)
+    st.write(book["description"])
+    st.markdown(f"**{money(book['price'])}**")
+    st.markdown("</div>", unsafe_allow_html=True)
+
     left, right = st.columns(2)
     with left:
         if st.button("＋ Add to cart", key="add_" + name, use_container_width=True):
@@ -102,9 +122,13 @@ def book_card(name):
                 st.session_state.wishlist.append(name)
             st.rerun()
 
+
 st.sidebar.markdown("## 📚 THE CAMPUS BOOKSTORE")
 st.sidebar.caption("Your campus. Your books. Your next chapter.")
-page = st.sidebar.radio("Navigate", ["Home", "Browse Books", "Shopping Cart", "Offers & Student Zone", "Checkout", "Wishlist", "About Us"])
+page = st.sidebar.radio(
+    "Navigate",
+    ["Home", "Browse Books", "Shopping Cart", "Offers & Student Zone", "Checkout", "Wishlist", "About Us"]
+)
 st.sidebar.metric("Books in cart", sum(st.session_state.cart.values()))
 st.sidebar.caption("Demo store • No real payments")
 
@@ -112,20 +136,42 @@ if page == "Home":
     st.markdown('<p class="eyebrow">A BOOKSTORE FOR CURIOUS MINDS</p>', unsafe_allow_html=True)
     st.title("Your next chapter starts here.")
     st.write("Discover useful reads for class, career and everything you're curious about.")
+
+    if HERO_IMAGE.is_file():
+        st.image(str(HERO_IMAGE), use_container_width=True)
+
     a, b = st.columns([1.3, 1])
     with a:
         st.subheader("Learn something new. Find your next favourite.")
         st.write("From business and finance to technology and law, explore a student-friendly catalogue.")
-        st.info("Book photography will be added in the next design pass.")
         st.caption("THOUGHTFUL PICKS · CLEAR PRICES · SIMPLE CHECKOUT")
     with b:
-        st.markdown('<div class="book-card"><div class="book-placeholder" style="padding:45px 8px"><div style="font-size:40px">✦ 📚 ✦</div><h3 style="color:white">READ. LEARN. GROW.</h3><p>Your student bookshelf</p></div></div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="book-card" style="text-align:center;padding:45px 8px;">'
+            '<div style="font-size:40px">✦ 📚 ✦</div>'
+            '<h3>READ. LEARN. GROW.</h3><p>Your student bookshelf</p></div>',
+            unsafe_allow_html=True
+        )
+
     st.divider()
     st.subheader("Shop by category")
     category_cols = st.columns(4)
-    for col, (icon, category) in zip(category_cols, [("◈","Business"),("▤","Finance & Analytics"),("⌘","Technology"),("§","Law & Economics")]):
+    category_items = [
+        ("◈", "Business"),
+        ("▤", "Finance & Analytics"),
+        ("⌘", "Technology"),
+        ("§", "Law & Economics"),
+    ]
+
+    for col, (icon, category) in zip(category_cols, category_items):
         with col:
-            st.markdown(f'<div class="book-card" style="text-align:center"><h2>{icon}</h2><b>{category}</b></div>', unsafe_allow_html=True)
+            category_image = CATEGORY_IMAGES.get(category)
+            if category_image and category_image.is_file():
+                st.image(str(category_image), use_container_width=True)
+            else:
+                st.markdown(f"### {icon}")
+            st.markdown(f"**{category}**")
+
     st.subheader("Featured reads")
     cols = st.columns(3)
     for col, name in zip(cols, list(books.keys())[:3]):
@@ -139,19 +185,27 @@ elif page == "Browse Books":
     categories = ["All categories"] + sorted(set(item["category"] for item in books.values()))
     category = st.selectbox("Category", categories)
     sorting = st.selectbox("Sort by", ["Featured", "Price: low to high", "Price: high to low", "Title: A to Z"])
-    matches = [name for name, item in books.items() if search.lower() in name.lower() and (category == "All categories" or item["category"] == category)]
+
+    matches = [
+        name for name, item in books.items()
+        if search.lower() in name.lower()
+        and (category == "All categories" or item["category"] == category)
+    ]
+
     if sorting == "Price: low to high":
         matches.sort(key=lambda name: books[name]["price"])
     elif sorting == "Price: high to low":
         matches.sort(key=lambda name: books[name]["price"], reverse=True)
     elif sorting == "Title: A to Z":
         matches.sort()
+
     st.caption(f"{len(matches)} book(s) found")
     if not matches:
         st.warning("No books match those filters. Try another search.")
+
     for start in range(0, len(matches), 3):
         cols = st.columns(3)
-        for col, name in zip(cols, matches[start:start+3]):
+        for col, name in zip(cols, matches[start:start + 3]):
             with col:
                 book_card(name)
 
@@ -176,6 +230,7 @@ elif page == "Shopping Cart":
                     st.rerun()
             subtotal += price * st.session_state.cart[name]
             st.divider()
+
         st.metric("Cart subtotal", money(subtotal))
         if st.button("Clear cart"):
             st.session_state.cart = {}
@@ -189,6 +244,7 @@ elif page == "Offers & Student Zone":
         st.markdown('<div class="book-card"><p class="eyebrow">STUDENT PERK</p><h2>Extra 5% off</h2><p>Apply the student discount at checkout.</p></div>', unsafe_allow_html=True)
     with c2:
         st.markdown('<div class="book-card"><p class="eyebrow">BOOK LOVER OFFER</p><h2>READ10</h2><p>Use READ10 for 10% off the book subtotal.</p></div>', unsafe_allow_html=True)
+
     st.subheader("Available coupon codes")
     st.code("READ10  —  10% off books\nWELCOME5  —  5% off books")
     st.caption("Coupon and student discounts combine up to 15% in this demo.")
@@ -204,6 +260,7 @@ elif page == "Checkout":
             line = books[name]["price"] * quantity
             subtotal += line
             st.write(f"{name} × {quantity} — {money(line)}")
+
         st.divider()
         delivery = st.radio("Delivery option", ["Store pickup (Free)", "Standard delivery (+₹60)", "Express delivery (+₹120)"])
         gift_wrap = st.checkbox("Gift wrapping (+₹30)")
@@ -211,17 +268,26 @@ elif page == "Checkout":
         coupon_choice = st.selectbox("Coupon code", ["No coupon", "READ10", "WELCOME5"])
         coupon = coupon_choice if coupon_choice in ["READ10", "WELCOME5"] else "No coupon"
         customer_name = st.text_input("Customer name (optional)")
-        rate, discount, delivery_charge, gift_charge, total = calculate_bill(subtotal, coupon, student_discount, delivery, gift_wrap)
+
+        rate, discount, delivery_charge, gift_charge, total = calculate_bill(
+            subtotal, coupon, student_discount, delivery, gift_wrap
+        )
+
         x, y, z = st.columns(3)
         x.metric("Subtotal", money(subtotal))
         y.metric(f"Discount ({rate}%)", "-" + money(discount))
         z.metric("Estimated total", money(total))
         st.write(f"Delivery: {money(delivery_charge)} · Gift wrapping: {money(gift_charge)}")
+
         if st.button("Create demo receipt", type="primary"):
             receipt = ["THE CAMPUS BOOKSTORE", "DEMO RECEIPT", f"Customer: {customer_name or 'Not provided'}", ""]
             for name, quantity in st.session_state.cart.items():
                 receipt.append(f"{name} x {quantity} — {money(books[name]['price'] * quantity)}")
-            receipt += ["", f"Subtotal: {money(subtotal)}", f"Discount: -{money(discount)}", f"Delivery: {money(delivery_charge)}", f"Gift wrapping: {money(gift_charge)}", f"FINAL TOTAL: {money(total)}", "", "Demo only. No payment taken."]
+            receipt += [
+                "", f"Subtotal: {money(subtotal)}", f"Discount: -{money(discount)}",
+                f"Delivery: {money(delivery_charge)}", f"Gift wrapping: {money(gift_charge)}",
+                f"FINAL TOTAL: {money(total)}", "", "Demo only. No payment taken."
+            ]
             st.success("Demo receipt is ready. No payment has been taken.")
             st.download_button("Download receipt (.txt)", "\n".join(receipt), file_name="campus_bookstore_receipt.txt", mime="text/plain")
 
@@ -229,6 +295,7 @@ elif page == "Wishlist":
     st.title("Your wishlist")
     if not st.session_state.wishlist:
         st.info("Your wishlist is empty. Save books from Browse Books.")
+
     for name in list(st.session_state.wishlist):
         c1, c2, c3 = st.columns([4, 1, 1])
         with c1:
