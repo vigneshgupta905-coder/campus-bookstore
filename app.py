@@ -1,5 +1,6 @@
 import streamlit as st
 from pathlib import Path
+from datetime import datetime
 
 st.set_page_config(page_title="The Scholar’s Shelf", page_icon="📚", layout="wide", initial_sidebar_state="expanded")
 
@@ -219,6 +220,8 @@ EXCHANGE_LISTINGS = [
 ]
 
 if "cart" not in st.session_state: st.session_state.cart = {}
+if "rental_cart" not in st.session_state: st.session_state.rental_cart = {}
+if "borrow_requests" not in st.session_state: st.session_state.borrow_requests = []
 if "wishlist" not in st.session_state: st.session_state.wishlist = []
 if "exchange_interest" not in st.session_state: st.session_state.exchange_interest = []
 if "bundle" not in st.session_state: st.session_state.bundle = []
@@ -277,7 +280,6 @@ def calculate_bill(subtotal, coupon, student_discount, delivery, gift_wrap):
 def add_book(name):
     if name in books:
         st.session_state.cart[name] = st.session_state.cart.get(name, 0) + 1
-
 def book_card(name, show_author=True):
     book = books[name]
     st.markdown('<div class="book-card">', unsafe_allow_html=True)
@@ -342,7 +344,7 @@ page = st.sidebar.radio(
     key="nav_choice",
 )
 st.sidebar.metric("Books in catalogue", len(books))
-st.sidebar.metric("Books in cart", sum(st.session_state.cart.values()))
+st.sidebar.metric("Items in cart", sum(st.session_state.cart.values()) + sum(st.session_state.rental_cart.values()))
 st.sidebar.caption("Demo store • No real payments or confirmed lending")
 
 if page == "Home":
@@ -443,24 +445,46 @@ elif page == "Semester Bundle Builder":
 
 elif page == "Library Mode":
     st.title("Library Mode: Buy, Borrow or Rent")
-    st.write("Compare the options shown for each title. Borrowing and rental details are illustrative only; no live library inventory or due dates are connected.")
+    st.write("Choose an option for each book. Rentals and borrowing requests are demo features; real inventory and due dates are not connected.")
     mode = st.radio("Show options for", ["All options", "Buying", "Borrowing information", "Rental information"], horizontal=True)
     query = st.text_input("Find a title", placeholder="Search by title or author")
     for title, item in books.items():
-        if query.lower() not in (title + " " + item["author"]).lower(): continue
+        if query.lower() not in (title + " " + item["author"]).lower():
+            continue
+        rental_price = max(1, round(item["price"] * 0.22))
         if mode == "Buying":
             st.write(f"**{title}** — Buy: {money(item['price'])}")
         elif mode == "Borrowing information":
-            st.write(f"**{title}** — " + ("Borrowing may be available in a participating campus library; check local availability and due dates." if item["borrow_available"] else "No borrowing information listed for this title. Check your campus library catalogue."))
+            st.write(f"**{title}** — " + ("Borrowing may be available in a participating campus library; this demo can record a request but cannot confirm availability." if item["borrow_available"] else "Borrowing is not listed for this title. Check your campus library catalogue."))
         elif mode == "Rental information":
-            st.write(f"**{title}** — Illustrative rental estimate: {money(round(item['price'] * 0.22))} for a short rental period. This is not a real offer or confirmed availability.")
+            st.write(f"**{title}** — Demo rental price: {money(rental_price)} for a short rental period.")
         else:
             st.markdown(f"**{title}** · By {item['author']}")
-            st.write(f"Buy: {money(item['price'])} | Rental estimate: {money(round(item['price'] * 0.22))}")
-            st.caption("Borrowing: check with your campus library; this demo does not confirm stock or due dates.")
-        if mode in ["All options", "Buying"]:
-            if st.button(f"Add {title} to cart", key="library_add_" + title):
-                add_book(title); st.toast(f"Added {title} to cart")
+            st.write(f"Buy: {money(item['price'])} · Rent (demo): {money(rental_price)}")
+            st.caption("Borrowing requests are saved for this session only and are not sent to a real library.")
+        action = st.selectbox(f"Choose an option for {title}", ["Buy", "Rent", "Borrow"], key=f"action_{title}")
+        if st.button(f"Confirm {action} — {title}", key=f"confirm_{title}"):
+            if action == "Buy":
+                add_book(title)
+                st.success(f"{title} added to your purchase cart.")
+            elif action == "Rent":
+                st.session_state.rental_cart[title] = st.session_state.rental_cart.get(title, 0) + 1
+                st.success(f"{title} added to your rental cart at {money(rental_price)} per copy.")
+            else:
+                if not item["borrow_available"]:
+                    st.warning("Borrowing is not listed for this title. Please check your campus library catalogue.")
+                else:
+                    request = {"title": title, "author": item["author"], "requested_at": datetime.now().strftime("%d %b %Y, %I:%M %p")}
+                    if not any(r["title"] == title for r in st.session_state.borrow_requests):
+                        st.session_state.borrow_requests.append(request)
+                    st.success(f"Demo borrowing request recorded for {title}. No payment was taken.")
+        st.divider()
+
+    if st.session_state.borrow_requests:
+        st.subheader("Your demo borrowing requests")
+        for request in st.session_state.borrow_requests:
+            st.write(f"📚 **{request['title']}** — request recorded {request['requested_at']}")
+        st.caption("These requests are stored only for this running session; they are not sent to a real library.")
 
 elif page == "Campus Book Exchange":
     st.title("Campus Book Exchange")
@@ -485,29 +509,57 @@ elif page == "Campus Book Exchange":
 
 elif page == "Shopping Cart":
     st.title("Your shopping cart")
-    if not st.session_state.cart: st.info("Your cart is empty. Browse Books to add something to your shelf.")
+    if not (st.session_state.cart or st.session_state.rental_cart):
+        st.info("Your cart is empty. Browse books or open Library Mode to buy or rent a title.")
     else:
         subtotal = 0
-        for name in list(st.session_state.cart.keys()):
-            if name not in books:
-                del st.session_state.cart[name]
-                continue
-            price = books[name]["price"]
-            c1, c2, c3 = st.columns([4, 2, 1])
-            with c1:
-                st.write(f"**{name}**")
-                st.caption(f"{books[name]['category']} · {money(price)} each")
-            with c2:
-                qty = st.number_input("Quantity", min_value=1, max_value=20, value=int(st.session_state.cart[name]), step=1, key="qty_" + name)
-                st.session_state.cart[name] = qty
-            with c3:
-                if st.button("Remove", key="remove_" + name):
-                    del st.session_state.cart[name]; st.rerun()
-            subtotal += price * st.session_state.cart[name]
-            st.divider()
-        st.metric("Cart subtotal", money(subtotal))
+        if st.session_state.cart:
+            st.subheader("Books to buy")
+            for name in list(st.session_state.cart.keys()):
+                if name not in books:
+                    del st.session_state.cart[name]
+                    continue
+                price = books[name]["price"]
+                c1, c2, c3 = st.columns([4, 2, 1])
+                with c1:
+                    st.write(f"**{name}**")
+                    st.caption(f"Purchase · {money(price)} each")
+                with c2:
+                    qty = st.number_input("Quantity", min_value=1, max_value=20, value=int(st.session_state.cart[name]), step=1, key="qty_" + name)
+                    st.session_state.cart[name] = qty
+                with c3:
+                    if st.button("Remove", key="remove_" + name):
+                        del st.session_state.cart[name]
+                        st.rerun()
+                subtotal += price * st.session_state.cart[name]
+                st.divider()
+        if st.session_state.rental_cart:
+            st.subheader("Books to rent")
+            for name in list(st.session_state.rental_cart.keys()):
+                if name not in books:
+                    del st.session_state.rental_cart[name]
+                    continue
+                price = max(1, round(books[name]["price"] * 0.22))
+                c1, c2, c3 = st.columns([4, 2, 1])
+                with c1:
+                    st.write(f"**{name}**")
+                    st.caption(f"Demo rental · {money(price)} per copy")
+                with c2:
+                    qty = st.number_input("Rental quantity", min_value=1, max_value=20, value=int(st.session_state.rental_cart[name]), step=1, key="rent_qty_" + name)
+                    st.session_state.rental_cart[name] = qty
+                with c3:
+                    if st.button("Remove rental", key="remove_rent_" + name):
+                        del st.session_state.rental_cart[name]
+                        st.rerun()
+                subtotal += price * st.session_state.rental_cart[name]
+                st.divider()
+        st.metric("Cart subtotal (buying + rentals)", money(subtotal))
+        if st.session_state.borrow_requests:
+            st.caption(f"{len(st.session_state.borrow_requests)} demo borrowing request(s) recorded. Borrowing requests are not charged.")
         if st.button("Clear cart"):
-            st.session_state.cart = {}; st.rerun()
+            st.session_state.cart = {}
+            st.session_state.rental_cart = {}
+            st.rerun()
 
 elif page == "Offers & Student Zone":
     st.title("Offers & Student Zone")
@@ -529,14 +581,20 @@ elif page == "Checkout":
     from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 
     st.title("Checkout")
-    if not st.session_state.cart:
-        st.info("Your cart is empty. Add books before checking out.")
+    if not (st.session_state.cart or st.session_state.rental_cart):
+        st.info("Your cart is empty. Add books to buy or rent before checking out. Borrowing requests do not have a charge.")
     else:
-        subtotal = sum(books[name]["price"] * quantity for name, quantity in st.session_state.cart.items() if name in books)
+        purchase_subtotal = sum(books[name]["price"] * quantity for name, quantity in st.session_state.cart.items() if name in books)
+        rental_subtotal = sum(max(1, round(books[name]["price"] * 0.22)) * quantity for name, quantity in st.session_state.rental_cart.items() if name in books)
+        subtotal = purchase_subtotal + rental_subtotal
         st.subheader("Order summary")
         for name, quantity in st.session_state.cart.items():
             if name in books:
-                st.write(f"{name} × {quantity} — {money(books[name]['price'] * quantity)}")
+                st.write(f"**Buy:** {name} × {quantity} — {money(books[name]['price'] * quantity)}")
+        for name, quantity in st.session_state.rental_cart.items():
+            if name in books:
+                rental_price = max(1, round(books[name]["price"] * 0.22))
+                st.write(f"**Rent (demo):** {name} × {quantity} — {money(rental_price * quantity)}")
         st.divider()
         delivery = st.radio("Delivery option", ["Store pickup (Free)", "Standard delivery (+₹60)", "Express delivery (+₹120)"])
         gift_wrap = st.checkbox("Gift wrapping (+₹30)")
@@ -572,7 +630,11 @@ elif page == "Checkout":
             for name, quantity in st.session_state.cart.items():
                 if name in books:
                     unit_price = books[name]["price"]
-                    rows.append([Paragraph(name.replace("&", "&amp;"), styles["Normal"]), str(quantity), money(unit_price), money(unit_price * quantity)])
+                    rows.append([Paragraph(("Buy: " + name).replace("&", "&amp;"), styles["Normal"]), str(quantity), money(unit_price), money(unit_price * quantity)])
+            for name, quantity in st.session_state.rental_cart.items():
+                if name in books:
+                    unit_price = max(1, round(books[name]["price"] * 0.22))
+                    rows.append([Paragraph(("Rent (demo): " + name).replace("&", "&amp;"), styles["Normal"]), str(quantity), money(unit_price), money(unit_price * quantity)])
             table = Table(rows, colWidths=[245, 42, 85, 95], repeatRows=1)
             table.setStyle(TableStyle([
                 ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#5b1d3b")),
